@@ -7,8 +7,8 @@ const SVG = '<?xml version="1.0"?>\n<svg xmlns="http://www.w3.org/2000/svg" widt
 
 // Stands in for Graphviz (`-Tplain` answers a 4x2 inch graph, `-Tsvg` a tiny
 // SVG) and for the engine's own reply drawing (a Markdown of the text).
-function fakeDot(on: On, exitCode = 0) {
-  mock.env(on, { HOME: '/Users/test' })
+function fakeDot(on: On, { exitCode = 0, terminal = 'ghostty' } = {}) {
+  mock.env(on, { HOME: '/Users/test', TERM_PROGRAM: terminal })
   on('process.run', (_$, e) => {
     const isSvg = e.argv.includes('-Tsvg')
     return {
@@ -72,7 +72,7 @@ test('an unclosed fence (still streaming) is not rendered', async ($, on) => {
 })
 
 test('a dot error falls back to the source', async ($, on) => {
-  fakeDot(on, 1)
+  fakeDot(on, { exitCode: 1 })
   const ui = await $.ui.mount({
     plugin: 'graphmod',
     surface: 'terminal',
@@ -95,4 +95,26 @@ test('the system prompt gets the diagrams section', async ($, on) => {
     traits: [],
   })
   expect(composed.sections.at(-1)?.id).toBe('graphmod:diagrams')
+})
+
+test('a terminal without pictures gets the source and a link to the PNG', async ($, on) => {
+  fakeDot(on, { terminal: 'Apple_Terminal' })
+  const ui = await $.ui.mount({ plugin: 'graphmod', surface: 'terminal', component: 'AssistantMessage', props: PROPS })
+  expect(await ui.find({ type: 'Image' })).toBeUndefined()
+  expect(await ui.find({ type: 'Markdown', text: 'file:///Users/test/.cache/graphmod/' })).toBeDefined()
+  expect(await ui.find({ type: 'Markdown', text: 'digraph { a -> b }' })).toBeDefined()
+})
+
+test('a terminal without pictures does not ask for dot', async ($, on) => {
+  fakeDot(on, { terminal: 'Apple_Terminal' })
+  on('prompt.compose', () => ({ sections: [{ id: 'intro', text: 'base', scope: 'shared' as const }] }))
+  const composed = await $.prompt.compose({
+    model: 'claude-opus-5-5',
+    promptModel: 'claude-opus-5-5',
+    surfaces: ['terminal'],
+    tools: [],
+    outputStyle: null,
+    traits: [],
+  })
+  expect(composed.sections.map(section => section.id)).toEqual(['intro'])
 })

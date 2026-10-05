@@ -41,6 +41,11 @@ const CELL_WIDTH_PT = 8
 const CELL_ASPECT = 0.5
 const MAX_ROWS = 40
 
+// TERM_PROGRAM of terminals that speak the kitty graphics protocol, which
+// `Image` needs; kitty itself is told by TERM. Elsewhere (Terminal.app, tmux,
+// ssh) `Image` draws only its alt text.
+const IMAGE_TERMINALS = ['ghostty', 'WezTerm']
+
 const PROMPT = `# Diagrams (graphmod)
 The interface draws Graphviz DOT as a picture. When a diagram helps (a flow, an architecture, steps in order, a state machine, a dependency tree), write it as a fenced code block tagged \`dot\` that holds one complete \`digraph\` or \`graph\`. Do not draw diagrams with ASCII art or box-drawing characters.
 - Keep node labels short. Group with \`subgraph cluster_<name> { label="..." }\`; use \`shape=cylinder\` for data stores.
@@ -117,12 +122,26 @@ async function renderSvg($: EngineInterface, source: string): Promise<string | n
   }
 }
 
-function cached<T>(cache: Map<string, Promise<T>>, source: string, render: () => Promise<T>): Promise<T> {
+async function canShowImages($: EngineInterface): Promise<boolean> {
+  const program = await $.env.get('TERM_PROGRAM')
+  const term = await $.env.get('TERM')
+  return IMAGE_TERMINALS.includes(program ?? '') || term === 'xterm-kitty' || term === 'xterm-ghostty'
+}
+
+function cached<T>(
+  cache: Map<string, Promise<T | null>>,
+  source: string,
+  render: () => Promise<T | null>,
+): Promise<T | null> {
   const key = hash(source)
   let found = cache.get(key)
   if (found === undefined) {
     found = render()
     cache.set(key, found)
+    // A failed or interrupted render is tried again on the next draw.
+    void found.then(value => {
+      if (value === null) cache.delete(key)
+    })
   }
   return found
 }
@@ -131,6 +150,9 @@ export const register: Register = on => {
   on('prompt.compose', async ($, e, next) => {
     const composed = await next(e)
     if (e.surfaces.length === 0) return composed
+    // Only ask for dot where it becomes a picture; elsewhere Claude draws as before.
+    const showsPictures = e.surfaces.some(surface => surface !== 'terminal') || (await canShowImages($))
+    if (!showsPictures) return composed
 
     hasDot ??= $.process.run(['dot', '-V']).then(
       ran => ran.exitCode === 0,
@@ -155,10 +177,14 @@ export const register: Register = on => {
 
     for (const part of parts) {
       let picture: RenderElement | null = null
+      let fallback = part.kind === 'text' ? part.text : '```dot\n' + part.source + '\n```'
 
       if (part.kind === 'dot' && e.surface === 'terminal') {
         const png = await cached(pngs, part.source, () => renderPng($, part.source))
-        if (png !== null) {
+        if (png !== null && !(await canShowImages($))) {
+          // No pictures in this terminal: the source, and a link that opens the PNG.
+          fallback += `\n\n[Open the diagram](file://${encodeURI(png.file)})`
+        } else if (png !== null) {
           const { Box, Image } = $.ui.resolve(e)
           let columns = clamp(Math.min((png.width * 72) / CELL_WIDTH_PT, maxColumns), 1, 255)
           let rows = clamp(((columns * png.height) / png.width) * CELL_ASPECT, 1, 255)
@@ -185,9 +211,8 @@ export const register: Register = on => {
       }
 
       if (picture === null) {
-        // Text, or a diagram that did not render: the engine draws it as usual.
-        const text = part.kind === 'text' ? part.text : '```dot\n' + part.source + '\n```'
-        picture = await next({ ...e, props: { ...e.props, text, isFirstOfReply: isFirst } })
+        // Text, or a diagram not drawn as a picture: the engine draws it as usual.
+        picture = await next({ ...e, props: { ...e.props, text: fallback, isFirstOfReply: isFirst } })
       }
       drawn.push(picture)
       isFirst = false
