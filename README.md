@@ -31,6 +31,12 @@ and `TERM` (`xterm-kitty`, `xterm-ghostty`). Anywhere else (Terminal.app, tmux, 
 - the system prompt section is not added, so Claude draws diagrams as before;
 - a `dot` block that still appears is shown as source, with an "Open the diagram" `file://` link to the PNG.
 
+### Safety
+
+The mod runs only `mkdir` and `dot`, with no network access. The `dot` source comes from Claude's reply, so a
+block that would make `dot` read local files (`image=`, `shapefile=`, `imagepath=`, `fontpath=`, or an HTML-label
+`<IMG>`) is shown as text and not rendered.
+
 ## Requirements
 
 - Claude Code with mods (function hooks) support. Built and tested on `2.1.289`.

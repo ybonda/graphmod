@@ -46,6 +46,11 @@ const MAX_ROWS = 40
 // ssh) `Image` draws only its alt text.
 const IMAGE_TERMINALS = ['ghostty', 'WezTerm']
 
+// DOT that makes `dot` read local files (image, shapefile, search paths, an
+// HTML-label <IMG>). The source comes from a reply a prompt injection could
+// steer, so such a block is shown as text, never rendered.
+const READS_FILES = /\b(image|shapefile|imagepath|fontpath)\s*=|<\s*img\b/i
+
 const PROMPT = `# Diagrams (graphmod)
 The interface draws Graphviz DOT as a picture. When a diagram helps (a flow, an architecture, steps in order, a state machine, a dependency tree), write it as a fenced code block tagged \`dot\` that holds one complete \`digraph\` or \`graph\`. Do not draw diagrams with ASCII art or box-drawing characters.
 - Keep node labels short. Group with \`subgraph cluster_<name> { label="..." }\`; use \`shape=cylinder\` for data stores.
@@ -179,7 +184,9 @@ export const register: Register = on => {
       let picture: RenderElement | null = null
       let fallback = part.kind === 'text' ? part.text : '```dot\n' + part.source + '\n```'
 
-      if (part.kind === 'dot' && e.surface === 'terminal') {
+      const isDrawable = part.kind === 'dot' && !READS_FILES.test(part.source)
+
+      if (isDrawable && e.surface === 'terminal') {
         const png = await cached(pngs, part.source, () => renderPng($, part.source))
         if (png !== null && !(await canShowImages($))) {
           // No pictures in this terminal: the source, and a link that opens the PNG.
@@ -198,7 +205,7 @@ export const register: Register = on => {
             </Box>
           )
         }
-      } else if (part.kind === 'dot' && e.surface !== 'terminal') {
+      } else if (isDrawable && e.surface !== 'terminal') {
         const svg = await cached(svgs, part.source, () => renderSvg($, part.source))
         if (svg !== null) {
           const { Box, Svg } = $.ui.resolve(e)

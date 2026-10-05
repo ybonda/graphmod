@@ -118,3 +118,17 @@ test('a terminal without pictures does not ask for dot', async ($, on) => {
   })
   expect(composed.sections.map(section => section.id)).toEqual(['intro'])
 })
+
+test('dot that reads local files is shown as text, not rendered', async ($, on) => {
+  fakeDot(on)
+  for (const source of ['digraph { a [image="/etc/hosts"] }', 'digraph { a [label=<<IMG SRC="/x.png"/>>] }']) {
+    const ui = await $.ui.mount({
+      plugin: 'graphmod',
+      surface: 'terminal',
+      component: 'AssistantMessage',
+      props: { text: '```dot\n' + source + '\n```', isFirstOfReply: true },
+    })
+    expect(await ui.find({ type: 'Image' })).toBeUndefined()
+    expect(await ui.find({ type: 'Markdown', text: source })).toBeDefined()
+  }
+})
