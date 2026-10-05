@@ -7,32 +7,35 @@ const DOT_FENCE = /```dot[ \t]*\n([\s\S]*?)\n[ \t]*```/g
 // Graph padding in inches; added back to the size `-Tplain` reports.
 const PAD = 0.2
 
-// Defaults for every graph. Attributes written in the dot source win.
-// Mid-gray edges and pale filled nodes read on dark and light backgrounds.
+// Defaults for every graph: a cream card, white rounded boxes, warm gray
+// lines. Attributes written in the dot source win; hooks/style.g then colors
+// each cluster and turns box labels into cards.
 const STYLE = [
-  '-Gbgcolor=transparent',
+  '-Gbgcolor=#faf7f0',
   `-Gpad=${PAD}`,
-  '-Gnodesep=0.4',
-  '-Granksep=0.5',
-  '-Gfontname=Helvetica',
-  '-Gfontcolor=#8b95a7',
-  '-Gcolor=#8b95a7',
+  '-Gnodesep=0.35',
+  '-Granksep=0.55',
+  '-Gfontname=Menlo Bold',
+  '-Gfontsize=11',
+  '-Gfontcolor=#7a6650',
+  '-Gcolor=#ddd5c6',
   '-Gstyle=rounded',
+  '-Glabeljust=l',
   '-Nshape=box',
   '-Nstyle=rounded,filled',
-  '-Nfillcolor=#e3ebfb',
-  '-Ncolor=#5b7bd5',
-  '-Nfontcolor=#1d2433',
+  '-Nfillcolor=#fdfbf7',
+  '-Ncolor=#5b6472',
+  '-Nfontcolor=#2a2620',
   '-Nfontname=Helvetica',
-  '-Nfontsize=12',
-  '-Npenwidth=1.4',
-  '-Nmargin=0.18,0.08',
-  '-Ecolor=#8b95a7',
-  '-Efontcolor=#8b95a7',
-  '-Efontname=Helvetica',
+  '-Nfontsize=13',
+  '-Npenwidth=1.6',
+  '-Nmargin=0.16,0.1',
+  '-Ecolor=#b3aa98',
+  '-Efontcolor=#8a8273',
+  '-Efontname=Menlo',
   '-Efontsize=10',
   '-Earrowsize=0.7',
-  '-Epenwidth=1.3',
+  '-Epenwidth=1.4',
 ]
 
 // Terminal cell size in points (1 inch = 72 points), for a ~13pt monospace
@@ -53,14 +56,16 @@ const READS_FILES = /\b(image|shapefile|imagepath|fontpath)\s*=|<\s*img\b/i
 
 const PROMPT = `# Diagrams (graphmod)
 The interface draws Graphviz DOT as a picture. When a diagram helps (a flow, an architecture, steps in order, a state machine, a dependency tree), write it as a fenced code block tagged \`dot\` that holds one complete \`digraph\` or \`graph\`. Do not draw diagrams with ASCII art or box-drawing characters.
-- Keep node labels short. Group with \`subgraph cluster_<name> { label="..." }\`; use \`shape=cylinder\` for data stores.
+- Label a node \`"Title\\nshort detail"\`: the first line is drawn bold, the second small and monospace (a path, a command, a few words). Keep both short.
+- Keep the default top-to-bottom layout. Put each layer in \`subgraph cluster_<name> { label="..." }\`, 3 to 5 nodes per layer; each cluster gets its own color.
 - Do not set colors, fonts or sizes: the plugin styles the picture.
 - Tabular data stays a markdown table, not a diagram.
 - This is only for replies read here. Text the person will paste elsewhere (Slack, PR, Jira, commit messages) and files you write keep their usual format, with no \`dot\` blocks.`
 
 type Part = { kind: 'text'; text: string } | { kind: 'dot'; source: string }
 
-type Png = { file: string; width: number; height: number }
+// `page` is the interactive HTML next to the PNG, when it could be written.
+type Png = { file: string; page: string | null; width: number; height: number }
 
 const pngs = new Map<string, Promise<Png | null>>()
 const svgs = new Map<string, Promise<string | null>>()
@@ -97,19 +102,50 @@ function clamp(n: number, low: number, high: number): number {
   return Math.min(high, Math.max(low, Math.round(n)))
 }
 
-async function renderPng($: EngineInterface, source: string): Promise<Png | null> {
-  const dir = `${await $.env.get('HOME')}/.cache/graphmod`
-  const file = `${dir}/${hash(source)}.png`
+// Colors clusters and turns labels into cards (hooks/style.g). Without
+// `gvpr`, or when it fails, the plain source is drawn with STYLE alone.
+async function styled($: EngineInterface, source: string): Promise<string> {
   try {
-    await $.process.run(['mkdir', '-p', dir])
-    const ran = await $.process.run(['dot', '-Gdpi=144', ...STYLE, '-Tpng', '-o', file, '-Tplain'], {
+    const ran = await $.process.run(['gvpr', '-c', '-f', `${$.plugin.root}/hooks/style.g`], {
       stdin: source,
       timeoutMs: 10_000,
     })
+    return ran.exitCode === 0 && !ran.isStdoutTruncated && ran.stdout.trim() !== '' ? ran.stdout : source
+  } catch {
+    return source
+  }
+}
+
+// A page that opens in the browser: the SVG with hover, pin, pan and zoom.
+// Links in the SVG (`URL=`, `href=`) are dropped: the page is opened locally.
+async function writePage($: EngineInterface, svgFile: string, pageFile: string): Promise<boolean> {
+  try {
+    const svg = await $.fs.read(svgFile)
+    const start = svg.indexOf('<svg')
+    if (start < 0) return false
+    const safe = svg.slice(start).replace(/\s(?:xlink:)?href="[^"]*"/g, '')
+    const page = await $.fs.read(`${$.plugin.root}/hooks/page.html`)
+    await $.fs.write(pageFile, page.replace('<!--SVG-->', () => safe))
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function renderPng($: EngineInterface, source: string): Promise<Png | null> {
+  const dir = `${await $.env.get('HOME')}/.cache/graphmod`
+  const base = `${dir}/${hash(source)}`
+  try {
+    await $.process.run(['mkdir', '-p', dir])
+    const ran = await $.process.run(
+      ['dot', '-Gdpi=144', ...STYLE, '-Tpng', '-o', `${base}.png`, '-Tsvg', '-o', `${base}.svg`, '-Tplain'],
+      { stdin: await styled($, source), timeoutMs: 10_000 },
+    )
     // `-Tplain` starts with: graph <scale> <width> <height>, in inches.
     const size = /^graph \S+ (\S+) (\S+)/.exec(ran.stdout)
     if (ran.exitCode !== 0 || size === null) return null
-    return { file, width: Number(size[1]) + 2 * PAD, height: Number(size[2]) + 2 * PAD }
+    const page = (await writePage($, `${base}.svg`, `${base}.html`)) ? `${base}.html` : null
+    return { file: `${base}.png`, page, width: Number(size[1]) + 2 * PAD, height: Number(size[2]) + 2 * PAD }
   } catch {
     return null
   }
@@ -117,7 +153,7 @@ async function renderPng($: EngineInterface, source: string): Promise<Png | null
 
 async function renderSvg($: EngineInterface, source: string): Promise<string | null> {
   try {
-    const ran = await $.process.run(['dot', ...STYLE, '-Tsvg'], { stdin: source, timeoutMs: 10_000 })
+    const ran = await $.process.run(['dot', ...STYLE, '-Tsvg'], { stdin: await styled($, source), timeoutMs: 10_000 })
     const start = ran.stdout.indexOf('<svg')
     if (ran.exitCode !== 0 || start < 0) return null
     const svg = ran.stdout.slice(start)
@@ -189,10 +225,10 @@ export const register: Register = on => {
       if (isDrawable && e.surface === 'terminal') {
         const png = await cached(pngs, part.source, () => renderPng($, part.source))
         if (png !== null && !(await canShowImages($))) {
-          // No pictures in this terminal: the source, and a link that opens the PNG.
-          fallback += `\n\n[Open the diagram](file://${encodeURI(png.file)})`
+          // No pictures in this terminal: the source, and a link that opens the diagram.
+          fallback += `\n\n[Open the diagram](file://${encodeURI(png.page ?? png.file)})`
         } else if (png !== null) {
-          const { Box, Image } = $.ui.resolve(e)
+          const { Box, Image, Link, Text } = $.ui.resolve(e)
           let columns = clamp(Math.min((png.width * 72) / CELL_WIDTH_PT, maxColumns), 1, 255)
           let rows = clamp(((columns * png.height) / png.width) * CELL_ASPECT, 1, 255)
           if (rows > MAX_ROWS) {
@@ -200,8 +236,13 @@ export const register: Register = on => {
             columns = clamp((rows * png.width) / png.height / CELL_ASPECT, 1, 255)
           }
           picture = (
-            <Box paddingLeft={2} marginY={1}>
+            <Box paddingLeft={2} marginY={1} flexDirection="column">
               <Image source={{ file: png.file, format: 'png' }} columns={columns} rows={rows} alt={alt} />
+              {png.page !== null && (
+                <Text dimColor>
+                  <Link href={`file://${encodeURI(png.page)}`}>Open interactive diagram ↗</Link>
+                </Text>
+              )}
             </Box>
           )
         }

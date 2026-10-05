@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:">
+<title>graphmod diagram</title>
+<style>
+  :root { --page: #f1ece2; --card: #faf7f0; --line: #ddd5c6; --ink: #2a2620; --muted: #8a8273; --hot: #b8492f; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: flex; flex-direction: column; gap: 12px; padding: 16px;
+    background: var(--page) radial-gradient(circle, #e2dacb 1px, transparent 1px) 0 0 / 22px 22px;
+    font: 13px/1.4 ui-monospace, Menlo, monospace; color: var(--muted);
+  }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+  header b { color: var(--ink); font: 600 14px/1 -apple-system, Helvetica, sans-serif; }
+  header span { flex: 1; min-width: 12em; }
+  button {
+    font: inherit; color: var(--ink); background: var(--card); border: 1px solid var(--line);
+    border-radius: 8px; padding: 4px 12px; cursor: pointer;
+  }
+  button:hover { border-color: var(--muted); }
+  main {
+    flex: 1; min-height: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 18px;
+    background: var(--card); box-shadow: 0 1px 2px #0000000d, 0 8px 24px #0000000a;
+    cursor: grab; touch-action: none;
+  }
+  main.drag { cursor: grabbing; }
+  main > svg { display: block; width: 100%; height: 100%; }
+  main > svg > g > polygon:first-child { fill: transparent; stroke: none; }
+  g.node, g.edge { cursor: pointer; transition: opacity .15s; }
+  svg.focus g.node:not(.hi), svg.focus g.edge:not(.hi) { opacity: .16; }
+  g.edge.hi path, g.edge.hi polygon { stroke: var(--hot); stroke-width: 2.2px; }
+  g.edge.hi polygon { fill: var(--hot); }
+  g.edge.hi text { fill: var(--hot); }
+  g.node.pin > path, g.node.pin > polygon { stroke: var(--hot); stroke-width: 3px; }
+</style>
+</head>
+<body>
+<header>
+  <b>graphmod</b>
+  <span>hover a box to see its links · click to pin · drag to move · scroll to zoom</span>
+  <button id="out" title="Zoom out">−</button>
+  <button id="in" title="Zoom in">+</button>
+  <button id="fit">Fit</button>
+</header>
+<main>
+<!--SVG-->
+</main>
+<script>
+(() => {
+  const main = document.querySelector('main')
+  const svg = main.querySelector('svg')
+  if (!svg) return
+  svg.removeAttribute('width')
+  svg.removeAttribute('height')
+  const full = svg.viewBox.baseVal
+  const home = { x: full.x, y: full.y, w: full.width, h: full.height }
+  let view = { ...home }
+  const show = () => svg.setAttribute('viewBox', `${view.x} ${view.y} ${view.w} ${view.h}`)
+
+  // Who links to whom, from the <title> dot writes in each node and edge.
+  const nodes = new Map()
+  for (const g of svg.querySelectorAll('g.node')) nodes.set(g.querySelector('title').textContent, g)
+  const nodeOf = end => nodes.get(end) ?? nodes.get(end.replace(/:[^:]*$/, ''))
+  const links = new Map([...nodes.values()].map(g => [g, new Set()]))
+  const edges = []
+  for (const g of svg.querySelectorAll('g.edge')) {
+    const [a, b] = g.querySelector('title').textContent.split(/->|--/).map(nodeOf)
+    if (!a || !b) continue
+    edges.push({ g, a, b })
+    links.get(a).add(b)
+    links.get(b).add(a)
+  }
+
+  let pinned = null
+  function focus(target) {
+    for (const g of svg.querySelectorAll('.hi')) g.classList.remove('hi')
+    svg.classList.toggle('focus', target !== null)
+    if (target === null) return
+    if (links.has(target)) {
+      target.classList.add('hi')
+      for (const n of links.get(target)) n.classList.add('hi')
+      for (const e of edges) if (e.a === target || e.b === target) e.g.classList.add('hi')
+    } else {
+      const e = edges.find(e => e.g === target)
+      for (const g of [e.g, e.a, e.b]) g.classList.add('hi')
+    }
+  }
+  const hit = event => event.target.closest?.('g.node, g.edge') ?? null
+  svg.addEventListener('pointerover', event => { if (pinned === null) focus(hit(event)) })
+  svg.addEventListener('pointerleave', () => { if (pinned === null) focus(null) })
+
+  // Zoom around a point given in screen pixels.
+  function zoom(factor, cx, cy) {
+    const box = svg.getBoundingClientRect()
+    const scale = Math.max(view.w / box.width, view.h / box.height)
+    const px = view.x + (cx - box.left - (box.width - view.w / scale) / 2) * scale
+    const py = view.y + (cy - box.top - (box.height - view.h / scale) / 2) * scale
+    const w = Math.min(Math.max(view.w * factor, home.w / 20), home.w * 4)
+    const f = w / view.w
+    view = { x: px - (px - view.x) * f, y: py - (py - view.y) * f, w, h: view.h * f }
+    show()
+  }
+  main.addEventListener('wheel', event => {
+    event.preventDefault()
+    zoom(Math.exp(event.deltaY * 0.0015), event.clientX, event.clientY)
+  }, { passive: false })
+
+  let drag = null
+  main.addEventListener('pointerdown', event => {
+    drag = { x: event.clientX, y: event.clientY, moved: false, target: hit(event) }
+    main.setPointerCapture(event.pointerId)
+  })
+  main.addEventListener('pointermove', event => {
+    if (drag === null) return
+    const dx = event.clientX - drag.x, dy = event.clientY - drag.y
+    if (!drag.moved && Math.hypot(dx, dy) < 4) return
+    drag.moved = true
+    main.classList.add('drag')
+    const box = svg.getBoundingClientRect()
+    const scale = Math.max(view.w / box.width, view.h / box.height)
+    view.x -= dx * scale
+    view.y -= dy * scale
+    drag.x = event.clientX
+    drag.y = event.clientY
+    show()
+  })
+  main.addEventListener('pointerup', () => {
+    if (drag !== null && !drag.moved) {
+      // A click pins a box (or a line); a click on it again, or on empty space, lets go.
+      const target = drag.target
+      if (pinned !== null) pinned.classList.remove('pin')
+      pinned = target === pinned ? null : target
+      if (pinned !== null) pinned.classList.add('pin')
+      focus(pinned)
+    }
+    drag = null
+    main.classList.remove('drag')
+  })
+
+  const center = () => { const b = main.getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2] }
+  document.getElementById('in').onclick = () => zoom(1 / 1.3, ...center())
+  document.getElementById('out').onclick = () => zoom(1.3, ...center())
+  document.getElementById('fit').onclick = () => { view = { ...home }; show() }
+  show()
+})()
+</script>
+</body>
+</html>
