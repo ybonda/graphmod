@@ -1,0 +1,12 @@
+{
+  "name": "graphmode",
+  "owner": { "name": "Yuri Bondarenko" },
+  "description": "Claude Code mods by Yuri Bondarenko.",
+  "plugins": [
+    {
+      "name": "graphmode",
+      "source": "./",
+      "description": "Draws Graphviz dot diagrams in Claude replies as real pictures (Ghostty/kitty terminal, desktop app)."
+    }
+  ]
+}
