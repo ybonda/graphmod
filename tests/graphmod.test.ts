@@ -32,7 +32,7 @@ const PROPS = { text: REPLY, isFirstOfReply: true }
 test('a dot fence is drawn as an Image on the terminal', async ($, on) => {
   fakeDot(on)
   const ui = await $.ui.mount({
-    plugin: 'graphmode',
+    plugin: 'graphmod',
     surface: 'terminal',
     component: 'AssistantMessage',
     props: PROPS,
@@ -45,14 +45,14 @@ test('a dot fence is drawn as an Image on the terminal', async ($, on) => {
 
 test('a dot fence is drawn as an Svg on the desktop', async ($, on) => {
   fakeDot(on)
-  const ui = await $.ui.mount({ plugin: 'graphmode', surface: 'desktop', component: 'AssistantMessage', props: PROPS })
+  const ui = await $.ui.mount({ plugin: 'graphmod', surface: 'desktop', component: 'AssistantMessage', props: PROPS })
   expect(await ui.find({ type: 'Svg' })).toBeDefined()
 })
 
 test('a reply without a dot fence is left to the engine', async ($, on) => {
   fakeDot(on)
   const ui = await $.ui.mount({
-    plugin: 'graphmode',
+    plugin: 'graphmod',
     surface: 'terminal',
     component: 'AssistantMessage',
     props: { text: 'Just text.', isFirstOfReply: true },
@@ -63,7 +63,7 @@ test('a reply without a dot fence is left to the engine', async ($, on) => {
 test('an unclosed fence (still streaming) is not rendered', async ($, on) => {
   fakeDot(on)
   const ui = await $.ui.mount({
-    plugin: 'graphmode',
+    plugin: 'graphmod',
     surface: 'terminal',
     component: 'AssistantMessage',
     props: { text: '```dot\ndigraph { a -> b', isFirstOfReply: true },
@@ -74,7 +74,7 @@ test('an unclosed fence (still streaming) is not rendered', async ($, on) => {
 test('a dot error falls back to the source', async ($, on) => {
   fakeDot(on, 1)
   const ui = await $.ui.mount({
-    plugin: 'graphmode',
+    plugin: 'graphmod',
     surface: 'terminal',
     component: 'AssistantMessage',
     props: { text: '```dot\nnot a graph\n```', isFirstOfReply: true },
@@ -94,5 +94,5 @@ test('the system prompt gets the diagrams section', async ($, on) => {
     outputStyle: null,
     traits: [],
   })
-  expect(composed.sections.at(-1)?.id).toBe('graphmode:diagrams')
+  expect(composed.sections.at(-1)?.id).toBe('graphmod:diagrams')
 })

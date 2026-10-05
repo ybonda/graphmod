@@ -1,5 +1,5 @@
 {
-  "name": "graphmode",
+  "name": "graphmod",
   "version": "0.1.0",
   "description": "Draws Graphviz dot diagrams in Claude replies as real pictures (Ghostty/kitty terminal, desktop app).",
   "author": { "name": "Yuri Bondarenko" }

@@ -41,7 +41,7 @@ const CELL_WIDTH_PT = 8
 const CELL_ASPECT = 0.5
 const MAX_ROWS = 40
 
-const PROMPT = `# Diagrams (graphmode)
+const PROMPT = `# Diagrams (graphmod)
 The interface draws Graphviz DOT as a picture. When a diagram helps (a flow, an architecture, steps in order, a state machine, a dependency tree), write it as a fenced code block tagged \`dot\` that holds one complete \`digraph\` or \`graph\`. Do not draw diagrams with ASCII art or box-drawing characters.
 - Keep node labels short. Group with \`subgraph cluster_<name> { label="..." }\`; use \`shape=cylinder\` for data stores.
 - Do not set colors, fonts or sizes: the plugin styles the picture.
@@ -88,7 +88,7 @@ function clamp(n: number, low: number, high: number): number {
 }
 
 async function renderPng($: EngineInterface, source: string): Promise<Png | null> {
-  const dir = `${await $.env.get('HOME')}/.cache/graphmode`
+  const dir = `${await $.env.get('HOME')}/.cache/graphmod`
   const file = `${dir}/${hash(source)}.png`
   try {
     await $.process.run(['mkdir', '-p', dir])
@@ -137,11 +137,11 @@ export const register: Register = on => {
       () => false,
     )
     if (!(await hasDot)) {
-      if (!isDotWarned) $.ui.toast('graphmode: Graphviz `dot` not found. Run: brew install graphviz')
+      if (!isDotWarned) $.ui.toast('graphmod: Graphviz `dot` not found. Run: brew install graphviz')
       isDotWarned = true
       return composed
     }
-    return { sections: [...composed.sections, { id: 'graphmode:diagrams', text: PROMPT, scope: 'session' }] }
+    return { sections: [...composed.sections, { id: 'graphmod:diagrams', text: PROMPT, scope: 'session' }] }
   })
 
   on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
