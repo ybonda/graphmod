@@ -42,7 +42,6 @@ const STYLE = [
 // font: about 8pt wide and twice as tall.
 const CELL_WIDTH_PT = 8
 const CELL_ASPECT = 0.5
-const MAX_ROWS = 40
 
 // TERM_PROGRAM of terminals that speak the kitty graphics protocol, which
 // `Image` needs; kitty itself is told by TERM. Elsewhere (Terminal.app, tmux,
@@ -213,6 +212,8 @@ export const register: Register = on => {
 
     const alt = 'diagram (ctrl+o shows the dot source)'
     const maxColumns = (e.viewport?.columns ?? 100) - 4
+    // A tall diagram may fill the whole screen height, but no more.
+    const maxRows = (e.viewport?.rows ?? 40) - 2
     let isFirst = e.props.isFirstOfReply
     const drawn: RenderElement[] = []
 
@@ -231,8 +232,8 @@ export const register: Register = on => {
           const { Box, Image, Link, Text } = $.ui.resolve(e)
           let columns = clamp(Math.min((png.width * 72) / CELL_WIDTH_PT, maxColumns), 1, 255)
           let rows = clamp(((columns * png.height) / png.width) * CELL_ASPECT, 1, 255)
-          if (rows > MAX_ROWS) {
-            rows = MAX_ROWS
+          if (rows > maxRows) {
+            rows = clamp(maxRows, 1, 255)
             columns = clamp((rows * png.width) / png.height / CELL_ASPECT, 1, 255)
           }
           picture = (
