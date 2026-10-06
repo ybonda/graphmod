@@ -1,6 +1,6 @@
 {
   "name": "graphmod",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Draws Graphviz dot diagrams in Claude replies as real pictures (Ghostty/kitty terminal, desktop app).",
   "author": { "name": "Yuri Bondarenko" },
   "homepage": "https://github.com/ybonda/graphmod",

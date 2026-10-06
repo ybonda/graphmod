@@ -33,6 +33,17 @@ and the reply shows this, right in the terminal:
 3. Text around the diagram is drawn by Claude Code as usual. If `dot` fails, you see the source block.
    `ctrl+o` always shows the original reply text.
 
+### The skill and the `/graphmod:draw` command
+
+The prompt section is added only when the mod's hooks load. As a second path, the plugin also ships:
+
+- the `diagrams` skill (`skills/diagrams/SKILL.md`): its description is always in Claude's context and says
+  "draw diagrams as a ```` ```dot ```` block", so Claude uses `dot` even in a session where the prompt section is missing;
+- the `/graphmod:draw [what]` command (`commands/draw.md`): draws the given thing as `dot`. With no argument it
+  redraws the diagrams of the last reply as `dot`.
+
+The skill does not draw anything itself. If the mod did not load, a `dot` block is shown as source text.
+
 ### The interactive page
 
 The link opens an HTML page in your browser. Hover a box to highlight its lines and neighbors,
@@ -125,6 +136,8 @@ hooks/hooks.json                 names the hooks module
 hooks/register.tsx               the mod: prompt.compose + ui.render(AssistantMessage)
 hooks/style.g                    gvpr script: cluster colors and card labels
 hooks/page.html                  template of the interactive page
+skills/diagrams/SKILL.md         skill: "draw diagrams as dot" (same rules as the prompt section)
+commands/draw.md                 /graphmod:draw command
 tests/graphmod.test.ts           claude plugin test suite
 docs/demo.png                    the picture above
 docs/logo/                       logo: mark, wordmark, dark and one-color versions, small icons
