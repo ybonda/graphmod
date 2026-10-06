@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/logo/logo-dark.svg">
+    <img src="docs/logo/logo.svg" width="360" alt="graphmod">
+  </picture>
+</p>
+
 # graphmod
 
 A [Claude Code](https://claude.com/claude-code) mod that turns diagrams in Claude's replies into real pictures.
@@ -120,6 +127,7 @@ hooks/style.g                    gvpr script: cluster colors and card labels
 hooks/page.html                  template of the interactive page
 tests/graphmod.test.ts           claude plugin test suite
 docs/demo.png                    the picture above
+docs/logo/                       logo: mark, wordmark, dark and one-color versions, small icons
 ```
 
 ## License
