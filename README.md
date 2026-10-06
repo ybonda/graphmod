@@ -12,12 +12,12 @@ A [Claude Code](https://claude.com/claude-code) mod that turns diagrams in Claud
 You ask:
 
 ```
-❯ draw me the high level architecture of graphmod
+❯ Draw me high level architecture diagram of this repo
 ```
 
 and the reply shows this, right in the terminal:
 
-![graphmod architecture diagram: colored layers of cards, from the user and Claude through the hooks and drawing steps to the picture and the interactive page](docs/demo.png)
+![graphmod architecture diagram: colored layers of cards - plugin package, prompt time, render time, drawing with Graphviz, and output](docs/demo.png)
 
 ## How it works
 
